@@ -269,7 +269,8 @@ int32_t stlink_flash_loader_write_to_sram(stlink_t *sl, stm32_addr_t* addr, uint
                sl->chip_id == STM32_CHIPID_F334) {
         loader_code = loader_code_stm32vl;
         loader_size = sizeof(loader_code_stm32vl);
-    } else if (sl->chip_id == STM32_CHIPID_F2 ||
+    } else if (sl->chip_id == MDR32_CHIPID_VE9X ||
+				sl->chip_id == STM32_CHIPID_F2 ||
                sl->chip_id == STM32_CHIPID_F4 ||
                sl->chip_id == STM32_CHIPID_F4_DE ||
                sl->chip_id == STM32_CHIPID_F4_LP ||

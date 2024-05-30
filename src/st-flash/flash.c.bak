@@ -139,7 +139,6 @@ int32_t main(int32_t ac, char** av) {
 
     if (o.cmd == FLASH_CMD_WRITE) {
         uint32_t size = 0;
-		
 		 if (erase_type == MASS_ERASE) {
             err = stlink_erase_flash_mass(sl);
             if (err == -1) {

@@ -179,6 +179,11 @@ int32_t stlink_chip_id(stlink_t *sl, uint32_t *chip_id) {
     // STM32G4 (RM0440, pg2086)
     // STM32WB (RM0434, pg1406)
     ret = stlink_read_debug32(sl, 0xE0042000, chip_id);
+	
+	//Fix for MDR32 (1986VE9x)
+	 if (*chip_id == 0x000 && sl->core_id == STM32_CORE_ID_M3_r2p0_SWD) {
+      *chip_id = 0x400;
+    }
   }
 
   if (ret || !(*chip_id)) {
@@ -266,7 +271,8 @@ int32_t stlink_load_device_params(stlink_t *sl) {
 
   if ((sl->chip_id == STM32_CHIPID_L1_MD ||
        sl->chip_id == STM32_CHIPID_F1_VL_MD_LD ||
-       sl->chip_id == STM32_CHIPID_L1_MD_PLUS) &&
+       sl->chip_id == STM32_CHIPID_L1_MD_PLUS ||
+	   sl->chip_id == MDR32_CHIPID_VE9X) &&
       (flash_size == 0)) {
     sl->flash_size = 128 * 1024;
   } else if (sl->chip_id == STM32_CHIPID_L1_CAT2) {

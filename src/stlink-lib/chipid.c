@@ -210,15 +210,18 @@ void process_chipfile(char *fname) {
 #if defined(STLINK_HAVE_DIRENT_H)
 #include <dirent.h>
 
-void init_chipids(char *dir_to_scan) {
+void init_chipids(char *dir_to_scan) {	
   DIR *d;
   uint32_t nl; // namelen
   struct dirent *dir;
-
+  
+  #if defined(SET_LOCAL_CHIPS_DIR)
+  dir_to_scan = 0;
+  #endif //SET_LOCAL_CHIPS_DIR
+  
   if (!dir_to_scan) {
-    dir_to_scan = "./";
+    dir_to_scan = "./chips";
   }
-
   devicelist = NULL;
   d = opendir(dir_to_scan);
 

@@ -366,7 +366,8 @@ endif()
 
 # MCU configuration files
 if (WIN32)
-    set(CMAKE_CHIPS_DIR ${CMAKE_INSTALL_PREFIX}/config/chips)
+    add_definitions( -DSET_LOCAL_CHIPS_DIR)		
+	set(CMAKE_CHIPS_DIR ${CMAKE_INSTALL_PREFIX}/config/chips)
 else ()
     set(CMAKE_CHIPS_DIR ${CMAKE_INSTALL_FULL_DATADIR}/${PROJECT_NAME}/config/chips)
 endif()
