@@ -1,3 +1,13 @@
+[RU] Ниже описание оригинального проекта [stlink](https://github.com/stlink-org/stlink/).
+Отличия моего форка от оригинала:
+- [ADD] Добавлена поддержка микроконтроллеров Миландр серии 1986ВЕ9х;
+- [FIX] Папка chips, с описаниями микроконтроллеров, в сборке для Windows должна быть рядом с бинарниками.
+
+[EN] Below is a description of the original [stlink](https://github.com/stlink-org/stlink/) project.
+The differences between my fork and the original:
+- [ADD] Added support for the 1986VE9x series Milandr microcontrollers;
+- [FIX] The chips folder, with descriptions of microcontrollers, in the Windows build should be next to the binaries.
+
 # Open source version of the STMicroelectronics STLINK Tools
 
 [![BSD licensed](https://img.shields.io/badge/license-BSD-blue.svg)](https://raw.githubusercontent.com/hyperium/hyper/master/LICENSE)
