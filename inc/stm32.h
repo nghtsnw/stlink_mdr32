@@ -71,7 +71,7 @@ enum stm32_flash_type {
 
 enum stm32_chipids {
     STM32_CHIPID_UNKNOWN          = 0x000,
-
+	MDR32_CHIPID_VE9X			  = 0x400, /* придуманный чипид для миландра */
     STM32_CHIPID_F1_MD            = 0x410, /* medium density */
     STM32_CHIPID_F2               = 0x411,
     STM32_CHIPID_F1_LD            = 0x412, /* low density */
