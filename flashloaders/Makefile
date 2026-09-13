@@ -12,7 +12,7 @@ XXDFLAGS = -i -c 4
 CFLAGS_ARMV6_M = -mcpu=Cortex-M0 -Tlinker.ld -ffreestanding -nostdlib
 CFLAGS_ARMV7_M = -mcpu=Cortex-M3 -Tlinker.ld -ffreestanding -nostdlib
 
-all: stm32vl.h stm32f0.h stm32lx.h stm32f4.h stm32f4lv.h stm32l4.h stm32f7.h stm32f7lv.h
+all: stm32vl.h stm32f0.h stm32lx.h stm32f4.h stm32f4lv.h stm32l4.h stm32f7.h stm32f7lv.h mdr32.h
 	
 
 %.h: %.bin

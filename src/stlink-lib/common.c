@@ -269,10 +269,12 @@ int32_t stlink_load_device_params(stlink_t *sl) {
 
   flash_size = flash_size & 0xffff;
 
-  if ((sl->chip_id == STM32_CHIPID_L1_MD ||
+  if (sl->chip_id == MDR32_CHIPID_VE9X) {
+    // MDR32 (1986VE9x) has a fixed 128 KB flash and no reliable size register.
+    sl->flash_size = 128 * 1024;
+  } else if ((sl->chip_id == STM32_CHIPID_L1_MD ||
        sl->chip_id == STM32_CHIPID_F1_VL_MD_LD ||
-       sl->chip_id == STM32_CHIPID_L1_MD_PLUS ||
-	   sl->chip_id == MDR32_CHIPID_VE9X) &&
+       sl->chip_id == STM32_CHIPID_L1_MD_PLUS) &&
       (flash_size == 0)) {
     sl->flash_size = 128 * 1024;
   } else if (sl->chip_id == STM32_CHIPID_L1_CAT2) {

@@ -1,11 +1,13 @@
-# Chip-ID file for Milandr MDR32 1986VE9x device. Copied from STM32F2xx.
+# Chip-ID file for Milandr MDR32 1986VE9x device.
+# Flash is programmed through the dedicated EEPROM/flash controller (see
+# flashloaders/mdr32.s), not the STM32 F2/F4 interface.
 #
 dev_type 1986VE9x
 ref_manual_id 0033
 chip_id 0x400                // MDR_CHIPID_VE9X
-flash_type F2_F4
+flash_type MDR32
 flash_size_reg 0x1fff7a22
-flash_pagesize 0x20000       // 128 KB
+flash_pagesize 0x1000        // 4 KB page (4 x 1 KB sectors)
 sram_size 0x20000            // 128 KB
 bootrom_base 0x1fff0000
 bootrom_size 0x7800          // 30 KB

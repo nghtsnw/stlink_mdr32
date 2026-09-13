@@ -63,6 +63,7 @@ enum stm32_flash_type {
     STM32_FLASH_TYPE_L4        = 10,
     STM32_FLASH_TYPE_L5_U5_H5  = 11,
     STM32_FLASH_TYPE_WB_WL     = 12,
+    MDR32_FLASH_TYPE           = 13,
 };
 
 /* STM32 chip-ids */
@@ -140,6 +141,39 @@ enum stm32_chipids {
     STM32_CHIPID_WB55             = 0x495,
     STM32_CHIPID_WLE              = 0x497,
 };
+
+/* Milandr 1986VE9x (MDR32) EEPROM / flash memory controller */
+#define MDR32_EEPROM_BASE       ((uint32_t) 0x40018000)
+#define MDR32_EEPROM_CMD        (MDR32_EEPROM_BASE + 0x00)
+#define MDR32_EEPROM_ADR        (MDR32_EEPROM_BASE + 0x04)
+#define MDR32_EEPROM_DI         (MDR32_EEPROM_BASE + 0x08)
+#define MDR32_EEPROM_DO         (MDR32_EEPROM_BASE + 0x0C)
+#define MDR32_EEPROM_KEY        (MDR32_EEPROM_BASE + 0x10)
+
+#define MDR32_EEPROM_KEY_VALUE  ((uint32_t) 0x8AAA5551)
+
+#define MDR32_EEPROM_CMD_CON        (1u << 0)
+#define MDR32_EEPROM_CMD_WR         (1u << 1)
+#define MDR32_EEPROM_CMD_RD         (1u << 2)
+#define MDR32_EEPROM_CMD_DELAY_MASK (0x7u << 3)
+#define MDR32_EEPROM_CMD_XE         (1u << 6)
+#define MDR32_EEPROM_CMD_YE         (1u << 7)
+#define MDR32_EEPROM_CMD_SE         (1u << 8)
+#define MDR32_EEPROM_CMD_IFREN      (1u << 9)
+#define MDR32_EEPROM_CMD_ERASE      (1u << 10)
+#define MDR32_EEPROM_CMD_MAS1       (1u << 11)
+#define MDR32_EEPROM_CMD_PROG       (1u << 12)
+#define MDR32_EEPROM_CMD_NVSTR      (1u << 13)
+
+/* MDR32 flash organisation: 4 KiB page, 1 KiB sector, 4 sectors per page */
+#define MDR32_FLASH_PAGE_SIZE   ((uint32_t) 0x1000)
+#define MDR32_FLASH_SECTOR_SIZE ((uint32_t) 0x400)
+#define MDR32_FLASH_SECTORS_PER_PAGE 4
+
+/* MDR32 reset / clock controller */
+#define MDR32_RST_CLK           ((uint32_t) 0x40020000)
+#define MDR32_PER_CLOCK         (MDR32_RST_CLK + 0x1C)
+#define MDR32_PER_CLOCK_EEPROM  (1u << 3)
 
 /* Constant STM32 option bytes base memory address */
 #define STM32_C0_OPTION_BYTES_BASE ((uint32_t) 0x1fff7800)

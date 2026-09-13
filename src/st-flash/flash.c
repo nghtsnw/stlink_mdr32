@@ -345,7 +345,9 @@ int32_t main(int32_t ac, char** av) {
         }
     }
 
-    if (o.reset) stlink_reset(sl, RESET_AUTO);
+    // After writing, reset the target so the freshly flashed program starts
+    // immediately from its reset vector (with a correct stack pointer).
+    if (o.reset || o.cmd == FLASH_CMD_WRITE) stlink_reset(sl, RESET_AUTO);
 
     stlink_run(sl, RUN_NORMAL);
 

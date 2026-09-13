@@ -168,6 +168,10 @@ static inline int32_t write_flash_sr(stlink_t *sl, uint32_t bank, uint32_t val) 
 }
 
 void clear_flash_error(stlink_t *sl) {
+  if (sl->flash_type == MDR32_FLASH_TYPE) {
+    return; // no status register to clear on the MDR32 EEPROM controller
+  }
+
   switch (sl->flash_type) {
   case STM32_FLASH_TYPE_C0:
     write_flash_sr(sl, BANK_1, FLASH_C0_SR_ERROR_MASK);
@@ -250,6 +254,12 @@ uint32_t is_flash_busy(stlink_t *sl) {
   uint32_t sr_busy_shift;
   uint32_t res;
 
+  if (sl->flash_type == MDR32_FLASH_TYPE) {
+    // The MDR32 EEPROM/flash controller has no BUSY status bit; completion is
+    // guaranteed by software delays inside the flash loader / erase sequence.
+    return (0);
+  }
+
   if (sl->flash_type == STM32_FLASH_TYPE_C0) {
     sr_busy_shift = FLASH_C0_SR_BSY;
   } else if (sl->flash_type == STM32_FLASH_TYPE_F0_F1_F3 ||
@@ -298,6 +308,10 @@ int32_t check_flash_error(stlink_t *sl) {
   uint32_t WRPERR, PROGERR, PGAERR;
 
   WRPERR = PROGERR = PGAERR = 0;
+
+  if (sl->flash_type == MDR32_FLASH_TYPE) {
+    return (0); // no status register to check on the MDR32 EEPROM controller
+  }
 
   switch (sl->flash_type) {
   case STM32_FLASH_TYPE_C0:
@@ -992,6 +1006,30 @@ static void set_flash_cr_mer(stlink_t *sl, bool v, uint32_t bank) {
   stlink_write_debug32(sl, cr_reg, val);
 }
 
+/* Enable the MDR32 EEPROM/flash controller clock, unlock it and prepare the
+ * CMD register (preserve delay, set CON). The resulting base CMD value is
+ * returned through `cmd`. */
+static void mdr32_controller_unlock(stlink_t *sl, uint32_t *cmd) {
+  uint32_t per_clock;
+
+  if (!stlink_read_debug32(sl, MDR32_PER_CLOCK, &per_clock)) {
+    stlink_write_debug32(sl, MDR32_PER_CLOCK, per_clock | MDR32_PER_CLOCK_EEPROM);
+  }
+
+  stlink_write_debug32(sl, MDR32_EEPROM_KEY, MDR32_EEPROM_KEY_VALUE);
+  stlink_read_debug32(sl, MDR32_EEPROM_CMD, cmd);
+  *cmd = (*cmd & MDR32_EEPROM_CMD_DELAY_MASK) | MDR32_EEPROM_CMD_CON;
+  stlink_write_debug32(sl, MDR32_EEPROM_CMD, *cmd);
+}
+
+/* Restore the CMD register (keep delay, drop CON and all operation bits) and
+ * relock the MDR32 EEPROM/flash controller. */
+static void mdr32_controller_lock(stlink_t *sl, uint32_t cmd) {
+  cmd &= MDR32_EEPROM_CMD_DELAY_MASK;
+  stlink_write_debug32(sl, MDR32_EEPROM_CMD, cmd);
+  stlink_write_debug32(sl, MDR32_EEPROM_KEY, 0);
+}
+
 /**
  * Erase a page of flash, assumes sl is fully populated with things like
  * chip/core ids
@@ -1004,6 +1042,38 @@ int32_t stlink_erase_flash_page(stlink_t *sl, stm32_addr_t flashaddr) {
   wait_flash_busy(sl);
   // clear flash IO errors
   clear_flash_error(sl);
+
+  if (sl->flash_type == MDR32_FLASH_TYPE) {
+    uint32_t cmd;
+    uint32_t sector;
+
+    mdr32_controller_unlock(sl, &cmd);
+
+    // A page is made of four 1 KiB sectors; each sector is erased separately.
+    for (sector = 0; sector < MDR32_FLASH_SECTORS_PER_PAGE; sector++) {
+      stlink_write_debug32(sl, MDR32_EEPROM_ADR, flashaddr + (sector << 2));
+      stlink_write_debug32(sl, MDR32_EEPROM_DI, 0);
+
+      cmd |= MDR32_EEPROM_CMD_XE | MDR32_EEPROM_CMD_ERASE;
+      stlink_write_debug32(sl, MDR32_EEPROM_CMD, cmd);
+      usleep(5);
+
+      cmd |= MDR32_EEPROM_CMD_NVSTR;
+      stlink_write_debug32(sl, MDR32_EEPROM_CMD, cmd);
+      usleep(40000); // 40 ms erase pulse
+
+      cmd &= ~MDR32_EEPROM_CMD_ERASE;
+      stlink_write_debug32(sl, MDR32_EEPROM_CMD, cmd);
+      usleep(5);
+
+      cmd &= ~(MDR32_EEPROM_CMD_XE | MDR32_EEPROM_CMD_NVSTR);
+      stlink_write_debug32(sl, MDR32_EEPROM_CMD, cmd);
+      usleep(1);
+    }
+
+    mdr32_controller_lock(sl, cmd);
+    return (0);
+  }
 
   if (sl->flash_type == STM32_FLASH_TYPE_F2_F4 ||
       sl->flash_type == STM32_FLASH_TYPE_F7 ||
@@ -1236,6 +1306,38 @@ int32_t stlink_erase_flash_section(stlink_t *sl, stm32_addr_t base_addr, uint32_
 
 int32_t stlink_erase_flash_mass(stlink_t *sl) {
   int32_t err = 0;
+
+  if (sl->flash_type == MDR32_FLASH_TYPE) {
+    uint32_t cmd;
+    uint32_t sector;
+
+    mdr32_controller_unlock(sl, &cmd);
+
+    // Mass erase: with MAS1 set, each of the four sectors of every page is
+    // erased in turn (ADR selects the sector column via bits [3:2]).
+    for (sector = 0; sector < MDR32_FLASH_SECTORS_PER_PAGE; sector++) {
+      stlink_write_debug32(sl, MDR32_EEPROM_ADR, sector << 2);
+
+      cmd |= MDR32_EEPROM_CMD_XE | MDR32_EEPROM_CMD_MAS1 | MDR32_EEPROM_CMD_ERASE;
+      stlink_write_debug32(sl, MDR32_EEPROM_CMD, cmd);
+      usleep(5);
+
+      cmd |= MDR32_EEPROM_CMD_NVSTR;
+      stlink_write_debug32(sl, MDR32_EEPROM_CMD, cmd);
+      usleep(40000); // 40 ms erase pulse
+
+      cmd &= ~MDR32_EEPROM_CMD_ERASE;
+      stlink_write_debug32(sl, MDR32_EEPROM_CMD, cmd);
+      usleep(5);
+
+      cmd &= ~(MDR32_EEPROM_CMD_XE | MDR32_EEPROM_CMD_MAS1 | MDR32_EEPROM_CMD_NVSTR);
+      stlink_write_debug32(sl, MDR32_EEPROM_CMD, cmd);
+      usleep(1);
+    }
+
+    mdr32_controller_lock(sl, cmd);
+    return (0);
+  }
 
   // TODO: Use MER bit to mass-erase WB series.
   if (sl->flash_type == STM32_FLASH_TYPE_L0_L1 ||
@@ -1533,6 +1635,13 @@ int32_t stlink_write_flash(stlink_t *sl, stm32_addr_t addr, uint8_t *base,
   ret = stlink_flashloader_stop(sl, &fl);
   if (ret)
     return ret;
+
+  if (sl->flash_type == MDR32_FLASH_TYPE) {
+    // MDR32 flash-accelerator errata: after programming, the prefetch buffer
+    // may still hold stale data, so read a few words to flush it before the
+    // verify pass (otherwise the verify reads back the previous contents).
+    stlink_read_mem32(sl, sl->flash_base, 64);
+  }
 
   return (stlink_verify_write_flash(sl, addr, base, len));
 }

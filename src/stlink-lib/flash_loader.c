@@ -161,6 +161,46 @@ static const uint8_t loader_code_stm32f7_lv[] = {
     0x0e, 0x00, 0x00, 0x00
 };
 
+// flashloaders/mdr32.s -- Milandr 1986VE9x (MDR32) EEPROM/flash controller.
+// Programs one 32-bit word at a time with the required software delays
+// (the controller has no BUSY flag). Arguments: r0 = src, r1 = dst,
+// r2 = byte count (multiple of 4). The controller is unlocked and its CON
+// bit is set inside the loader, then relocked before the final bkpt.
+static const uint8_t loader_code_mdr32[] = {
+    0x19, 0x4b, 0x1a, 0x4c,
+    0x1c, 0x61, 0x1c, 0x68,
+    0x38, 0x25, 0x2c, 0x40,
+    0x01, 0x25, 0x2c, 0x43,
+    0x1c, 0x60, 0x59, 0x60,
+    0x05, 0x68, 0x9d, 0x60,
+    0x15, 0x4d, 0x2c, 0x43,
+    0x1c, 0x60, 0x0e, 0x25,
+    0x01, 0x3d, 0xfd, 0xd1,
+    0x13, 0x4d, 0x2c, 0x43,
+    0x1c, 0x60, 0x1b, 0x25,
+    0x01, 0x3d, 0xfd, 0xd1,
+    0x80, 0x25, 0x2c, 0x43,
+    0x1c, 0x60, 0x6b, 0x25,
+    0x01, 0x3d, 0xfd, 0xd1,
+    0x80, 0x25, 0xac, 0x43,
+    0x1c, 0x60, 0x0d, 0x4d,
+    0xac, 0x43, 0x1c, 0x60,
+    0x0e, 0x25, 0x01, 0x3d,
+    0xfd, 0xd1, 0x0b, 0x4d,
+    0xac, 0x43, 0x1c, 0x60,
+    0x04, 0x30, 0x04, 0x31,
+    0x04, 0x3a, 0xda, 0xdc,
+    0x38, 0x25, 0x2c, 0x40,
+    0x1c, 0x60, 0x00, 0x25,
+    0x1d, 0x61, 0x00, 0xbe,
+    0x00, 0x80, 0x01, 0x40,
+    0x51, 0x55, 0xaa, 0x8a,
+    0x40, 0x10, 0x00, 0x00,
+    0x00, 0x20, 0x00, 0x00,
+    0x00, 0x10, 0x00, 0x00,
+    0x40, 0x20, 0x00, 0x00
+};
+
 
 int32_t stlink_flash_loader_init(stlink_t *sl, flash_loader_t *fl) {
     uint32_t size = 0;
@@ -188,6 +228,8 @@ int32_t stlink_flash_loader_init(stlink_t *sl, flash_loader_t *fl) {
     // set address of IWDG key register for reset it
     if (sl->flash_type == STM32_FLASH_TYPE_H7) {
         fl->iwdg_kr = STM32H7_WDG_KR;
+    } else if (sl->flash_type == MDR32_FLASH_TYPE) {
+        fl->iwdg_kr = 0; // watchdog reset not needed for MDR32
     } else {
         fl->iwdg_kr = STM32F0_WDG_KR;
     }
@@ -269,8 +311,10 @@ int32_t stlink_flash_loader_write_to_sram(stlink_t *sl, stm32_addr_t* addr, uint
                sl->chip_id == STM32_CHIPID_F334) {
         loader_code = loader_code_stm32vl;
         loader_size = sizeof(loader_code_stm32vl);
-    } else if (sl->chip_id == MDR32_CHIPID_VE9X ||
-				sl->chip_id == STM32_CHIPID_F2 ||
+    } else if (sl->chip_id == MDR32_CHIPID_VE9X) {
+        loader_code = loader_code_mdr32;
+        loader_size = sizeof(loader_code_mdr32);
+    } else if (sl->chip_id == STM32_CHIPID_F2 ||
                sl->chip_id == STM32_CHIPID_F4 ||
                sl->chip_id == STM32_CHIPID_F4_DE ||
                sl->chip_id == STM32_CHIPID_F4_LP ||
@@ -600,7 +644,22 @@ int32_t stlink_flashloader_start(stlink_t *sl, flash_loader_t *fl) {
   // Clear errors
   clear_flash_error(sl);
 
-  if ((sl->flash_type == STM32_FLASH_TYPE_F2_F4) ||
+  if (sl->flash_type == MDR32_FLASH_TYPE) {
+    ILOG("Starting Flash write for MDR32 (1986VE9x)\n");
+
+    uint32_t per_clock;
+
+    // Enable the EEPROM/flash controller clock (PER_CLOCK bit 3)
+    if (!stlink_read_debug32(sl, MDR32_PER_CLOCK, &per_clock)) {
+      stlink_write_debug32(sl, MDR32_PER_CLOCK, per_clock | MDR32_PER_CLOCK_EEPROM);
+    }
+
+    // Flash loader initialisation (the loader unlocks, programs and relocks)
+    if (stlink_flash_loader_init(sl, fl) == -1) {
+      ELOG("stlink_flash_loader_init() == -1\n");
+      return (-1);
+    }
+  } else if ((sl->flash_type == STM32_FLASH_TYPE_F2_F4) ||
       (sl->flash_type == STM32_FLASH_TYPE_F7) ||
       (sl->flash_type == STM32_FLASH_TYPE_L4)) {
     ILOG("Starting Flash write for F2/F4/F7/L4\n");
@@ -732,8 +791,13 @@ int32_t stlink_flashloader_write(stlink_t *sl, flash_loader_t *fl, stm32_addr_t 
 
   if ((sl->flash_type == STM32_FLASH_TYPE_F2_F4) ||
       (sl->flash_type == STM32_FLASH_TYPE_F7) ||
-      (sl->flash_type == STM32_FLASH_TYPE_L4)) {
-    uint32_t buf_size = (sl->sram_size > 0x8000) ? 0x8000 : 0x4000;
+      (sl->flash_type == STM32_FLASH_TYPE_L4) ||
+      (sl->flash_type == MDR32_FLASH_TYPE)) {
+    // The MDR32 loader programs one word at a time with fixed ~60 us software
+    // delays, so a large chunk would exceed the 500 ms flash-loader timeout.
+    // Keep the MDR32 chunk at one page (4 KiB) to bound the per-run time.
+    uint32_t buf_size = (sl->flash_type == MDR32_FLASH_TYPE) ? 0x1000 :
+                        ((sl->sram_size > 0x8000) ? 0x8000 : 0x4000);
     for (off = 0; off < len;) {
       uint32_t size = len - off > buf_size ? buf_size : len - off;
       if (stlink_flash_loader_run(sl, fl, addr + off, base + off, size) == -1) {
